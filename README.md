@@ -49,34 +49,69 @@ This README documents: what bugs and issues I identified, how I fixed each one, 
 - **Issue**  
   Selecting a category updated the product results, but the subcategory dropdown still showed subcategories from unrelated categories.
 
+
 - **Impact**  
   Inconsistent filtering: users could pick subcategories that did not belong to the active category, making the UI feel unreliable and sometimes showing confusing or empty results.
+
 
 - **How I found it**  
   Selected a category on the home page and checked network requests in DevTools. The products request correctly sent the selected category, but the subcategory request was sent as `/api/subcategories` with no `category` query parameter.
 
+
 - **Root cause**  
   In `app/page.tsx`, the subcategory fetch called `/api/subcategories` without the selected category. The API in `app/api/subcategories/route.ts` already accepts an optional `category` and filters by it; the frontend never sent it, so the API returned all subcategories.
 
+
 - **Fix**  
-  In `app/page.tsx` (subcategory `useEffect`), include the selected category in the request:
+  In `app/page.tsx` (subcategory `useEffect`), include the selected category in the request (line 55-56):
 
   ```ts
   fetch(`/api/subcategories?category=${encodeURIComponent(selectedCategory)}`)
   ```
 
+
 - **Why this approach**  
   The API already supported the `category` query; only the frontend was missing it. Sending `selectedCategory` is a minimal change that matches the API contract. `encodeURIComponent` keeps the value safe in the query string.
 
 
-#### 2. 
 
-- **Issue**
-- **Impact**
+
+
+#### 2. Product detail page: data passed via URL and no defensive rendering
+
+- **Issue**  
+  The list page sent the full product object in the URL with `query: { product: JSON.stringify(product) }`, and the detail page parsed it from the query. The detail page also used `product.featureBullets`, `product.imageUrls`, and `product.retailerSku` without checking if they existed.
+
+
+- **Impact**  
+  Long or broken URLs, refresh or shared links failed when only the SKU was in the URL, unnecessary data exposure, and risk of runtime errors when data was missing or malformed.
+
+
 - **How I found it**  
+  Reviewed how the product link and detail page work: the list uses `Link` with a serialized product in the query, and the detail page reads it with `useSearchParams` and `JSON.parse`. The API `GET /api/products/[sku]` was not used, and there was no optional chaining or fallbacks for arrays or optional fields.
+
+
 - **Root cause**  
+  In `app/page.tsx`, the product link passed the whole product in the URL. In `app/product/page.tsx` (old), data came only from that query; there was no call to the existing products-by-SKU API. The UI assumed `featureBullets`, `imageUrls`, and `retailerSku` were always present.
+
+
 - **Fix**  
-- **Why I chose this approach**  
+  - **List page** (`app/page.tsx`): Change the product link to `href={\`/product/${product.stacklineSku}\`}` so the URL only contains the SKU.
+
+
+  - **Detail page**: Add `app/product/[sku]/page.tsx`. Use `useParams()` to get `sku`, fetch with `GET /api/products/[sku]`, and add loading and error states. Use defensive rendering: `product.imageUrls ?? []`, `product.featureBullets ?? []`, only show SKU when `product.retailerSku` is present, and use optional chaining where needed. Remove the old `app/product/page.tsx` that read from the query.
+
+
+  - **Turbopack**: Use a named function and export it at the end (`export default ProductDetailBySkuPage`) so the page is recognized as a valid React component.
+
+
+
+- **Why this approach**  
+  Using the path and API keeps URLs short and stable, supports refresh and sharing, and avoids sending full product data in the URL. Defensive checks prevent crashes when the API or sample data is incomplete. The separate default export avoids Turbopack’s issue with `export default function Name()` in this dynamic route.
+
+
+
+  
 
 #### 3. 
 
