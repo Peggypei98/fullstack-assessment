@@ -52,6 +52,7 @@ export default function Home() {
 
   useEffect(() => {
     if (selectedCategory) {
+      // fix 1: include the selected category in the subcategory request
       fetch(`/api/subcategories?category=${encodeURIComponent(selectedCategory)}`)
         .then((res) => res.json())
         .then((data) => setSubCategories(data.subCategories));
