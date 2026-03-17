@@ -142,7 +142,37 @@ This README documents: what bugs and issues I identified, how I fixed each one, 
 
   
 
-#### 4. 
+#### 4. Limit/offset falsy handling in product service
+
+- **Issue**  
+  In `lib/products.ts`, `getAll` used `filters?.offset || 0` and `filters?.limit || filtered.length`. Because `0` is falsy in JavaScript, passing `limit: 0` or `offset: 0` was treated as "not provided" and got the default instead, so `limit: 0` returned all products instead of none.
+
+
+- **Impact**  
+  Callers that explicitly pass `limit: 0` (e.g. "no results") would receive the full list. Any code passing `offset: 0` relied on the accident that `0 || 0` is still 0; the intent was unclear and fragile for pagination.
+
+
+- **How I found it**  
+  Reviewed `lib/products.ts` for how limit/offset are applied; noticed the use of `||` for defaulting and considered the case where the value is explicitly `0`.
+
+
+- **Root cause**  
+  `||` treats `0` as falsy, so `filters?.limit || filtered.length` becomes `filtered.length` when `limit` is `0`. The same pattern for `offset` is misleading even when the result happens to be correct.
+
+
+- **Fix**  
+  In `lib/products.ts` (around the two lines that set `offset` and `limit`), use nullish coalescing so only `undefined`/`null` get the default:
+
+  const offset = filters?.offset ?? 0;
+  const limit = filters?.limit ?? filtered.length;
+  
+
+
+
+
+
+### Reliability issues
+#### 1. 
 
 - **Issue**
 - **Impact**
