@@ -110,10 +110,39 @@ This README documents: what bugs and issues I identified, how I fixed each one, 
   Using the path and API keeps URLs short and stable, supports refresh and sharing, and avoids sending full product data in the URL. Defensive checks prevent crashes when the API or sample data is incomplete. The separate default export avoids Turbopack’s issue with `export default function Name()` in this dynamic route.
 
 
+#### 3. API query validation missing for limit and offset
+
+- **Issue**  
+  In `app/api/products/route.ts`, `limit` and `offset` were parsed with `parseInt` and passed through without checking for `NaN`, negative values, or unreasonable numbers. Invalid query strings (e.g. `?limit=abc` or `?offset=-1`) could lead to unstable API behavior.
+
+
+- **Impact**  
+  Requests with invalid or negative `limit`/`offset` could produce unexpected results or rely on downstream `||` fallbacks. The API could return `NaN` in the response or use invalid values in `slice(offset, offset + limit)`, making behavior unreliable in edge cases.
+
+
+- **How I found it**  
+  Reviewed the products API route and saw that `limit` and `offset` were read from query params with `parseInt` and used directly. Checked what happens when passing `?limit=abc`, `?limit=-1`, or `?offset=-1` and confirmed there was no validation.
+
+
+- **Root cause**  
+  In `app/api/products/route.ts`, the code used `searchParams.get('limit') ? parseInt(...) : 20` (and similarly for `offset`). When a value was present but not a valid number, `parseInt` returned `NaN` and that value was passed into the service. Negative values were also passed through unchanged.
+
+
+- **Fix**  
+  In `app/api/products/route.ts`, parse `limit` and `offset` then validate before use (lines 7–14):
+
+  - Parse with `parseInt(..., 10)` and use `Number.isNaN()` to detect invalid numbers.
+  - For `limit`: if NaN or &lt; 1, use default 20; optionally cap with `Math.min(parsedLimit, 100)`.
+  - For `offset`: if NaN or &lt; 0, use default 0.
+  - Use the validated `limit` and `offset` in the filters object so the response and `getAll` always receive valid numbers.
+
+
+- **Why this approach**  
+  Validating at the API boundary keeps the service simple and guarantees the response never contains `NaN`. Using defaults for invalid input avoids breaking callers while keeping behavior predictable. An optional limit cap prevents overly large responses.
 
   
 
-#### 3. 
+#### 4. 
 
 - **Issue**
 - **Impact**
