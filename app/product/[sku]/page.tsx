@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,29 +14,60 @@ interface Product {
   title: string;
   categoryName: string;
   subCategoryName: string;
-  imageUrls: string[];
-  featureBullets: string[];
-  retailerSku: string;
+  imageUrls?: string[];
+  featureBullets?: string[];
+  retailerSku?: string;
 }
 
-export default function ProductPage() {
-  const searchParams = useSearchParams();
-  const productParam = searchParams.get('product');
+function ProductDetailBySkuPage() {
+  const params = useParams();
+  const sku = params?.sku as string | undefined;
+
   const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
 
   useEffect(() => {
-    if (productParam) {
-      try {
-        const parsedProduct = JSON.parse(productParam);
-        setProduct(parsedProduct);
-      } catch (error) {
-        console.error('Failed to parse product data:', error);
-      }
+    if (!sku) {
+      setLoading(false);
+      setError(true);
+      return;
     }
-  }, [productParam]);
+    setLoading(true);
+    setError(false);
+    fetch(`/api/products/${encodeURIComponent(sku)}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Not found');
+        return res.json();
+      })
+      .then((data) => {
+        setProduct(data);
+        setSelectedImage(0);
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [sku]);
 
-  if (!product) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
+          <Link href="/">
+            <Button variant="ghost" className="mb-4">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Products
+            </Button>
+          </Link>
+          <Card className="p-8">
+            <p className="text-center text-muted-foreground">Loading...</p>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !product) {
     return (
       <div className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-8">
@@ -54,6 +85,11 @@ export default function ProductPage() {
     );
   }
 
+  const imageUrls = product.imageUrls ?? [];
+  const featureBullets = product.featureBullets ?? [];
+  const hasMultipleImages = imageUrls.length > 1;
+  const mainImageUrl = imageUrls[selectedImage];
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
@@ -69,23 +105,27 @@ export default function ProductPage() {
             <Card className="overflow-hidden">
               <CardContent className="p-0">
                 <div className="relative h-96 w-full bg-muted">
-                  {product.imageUrls[selectedImage] && (
+                  {mainImageUrl ? (
                     <Image
-                      src={product.imageUrls[selectedImage]}
-                      alt={product.title}
+                      src={mainImageUrl}
+                      alt={product.title ?? 'Product'}
                       fill
                       className="object-contain p-8"
                       sizes="(max-width: 1024px) 100vw, 50vw"
                       priority
                     />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      No image
+                    </div>
                   )}
                 </div>
               </CardContent>
             </Card>
 
-            {product.imageUrls.length > 1 && (
+            {hasMultipleImages && (
               <div className="grid grid-cols-4 gap-2">
-                {product.imageUrls.map((url, idx) => (
+                {imageUrls.map((url, idx) => (
                   <button
                     key={idx}
                     onClick={() => setSelectedImage(idx)}
@@ -95,7 +135,7 @@ export default function ProductPage() {
                   >
                     <Image
                       src={url}
-                      alt={`${product.title} - Image ${idx + 1}`}
+                      alt={`${product.title ?? 'Product'} - Image ${idx + 1}`}
                       fill
                       className="object-contain p-2"
                       sizes="100px"
@@ -109,19 +149,21 @@ export default function ProductPage() {
           <div className="space-y-6">
             <div>
               <div className="flex gap-2 mb-2">
-                <Badge variant="secondary">{product.categoryName}</Badge>
-                <Badge variant="outline">{product.subCategoryName}</Badge>
+                <Badge variant="secondary">{product.categoryName ?? ''}</Badge>
+                <Badge variant="outline">{product.subCategoryName ?? ''}</Badge>
               </div>
-              <h1 className="text-3xl font-bold mb-2">{product.title}</h1>
-              <p className="text-sm text-muted-foreground">SKU: {product.retailerSku}</p>
+              <h1 className="text-3xl font-bold mb-2">{product.title ?? 'Untitled'}</h1>
+              {product.retailerSku != null && product.retailerSku !== '' && (
+                <p className="text-sm text-muted-foreground">SKU: {product.retailerSku}</p>
+              )}
             </div>
 
-            {product.featureBullets.length > 0 && (
+            {featureBullets.length > 0 && (
               <Card>
                 <CardContent className="pt-6">
                   <h2 className="text-lg font-semibold mb-3">Features</h2>
                   <ul className="space-y-2">
-                    {product.featureBullets.map((feature, idx) => (
+                    {featureBullets.map((feature, idx) => (
                       <li key={idx} className="flex items-start">
                         <span className="mr-2 mt-1 h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
                         <span className="text-sm">{feature}</span>
@@ -137,3 +179,5 @@ export default function ProductPage() {
     </div>
   );
 }
+
+export default ProductDetailBySkuPage;
