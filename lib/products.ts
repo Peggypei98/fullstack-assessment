@@ -52,8 +52,8 @@ export class ProductService {
       );
     }
 
-    const offset = filters?.offset || 0;
-    const limit = filters?.limit || filtered.length;
+    const offset = filters?.offset ?? 0;
+    const limit = filters?.limit ?? filtered.length;
 
     return filtered.slice(offset, offset + limit);
   }
